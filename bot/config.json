@@ -1,0 +1,155 @@
+{
+  "minDiscount": 60,
+  "pages": 1,
+  "groups": [
+    {
+      "id": "men",
+      "name": "Men",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "men-tshirts",
+          "Men T-shirts"
+        ],
+        [
+          "men-casual-shirts",
+          "Men Casual Shirts"
+        ],
+        [
+          "men-jeans",
+          "Men Jeans"
+        ],
+        [
+          "men-sportswear",
+          "Men Sportswear"
+        ]
+      ]
+    },
+    {
+      "id": "women",
+      "name": "Women",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "women-kurtas-kurtis-suits",
+          "Women Kurtas & Suits"
+        ],
+        [
+          "women-dresses",
+          "Women Dresses"
+        ],
+        [
+          "women-jeans",
+          "Women Jeans"
+        ],
+        [
+          "sarees",
+          "Sarees"
+        ]
+      ]
+    },
+    {
+      "id": "footwear",
+      "name": "Footwear",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "men-sports-shoes",
+          "Men Sports Shoes"
+        ],
+        [
+          "men-casual-shoes",
+          "Men Casual Shoes"
+        ],
+        [
+          "women-flats",
+          "Women Flats"
+        ],
+        [
+          "women-heels",
+          "Women Heels"
+        ]
+      ]
+    },
+    {
+      "id": "beauty",
+      "name": "Beauty",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "lipstick",
+          "Lipstick"
+        ],
+        [
+          "face-moisturisers",
+          "Face Moisturisers"
+        ],
+        [
+          "perfumes",
+          "Perfumes"
+        ],
+        [
+          "skin-care",
+          "Skin Care"
+        ]
+      ]
+    },
+    {
+      "id": "care",
+      "name": "Personal Care",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "personal-care",
+          "Personal Care"
+        ],
+        [
+          "bath-and-body",
+          "Bath & Body"
+        ]
+      ]
+    },
+    {
+      "id": "gadgets",
+      "name": "Gadgets & Watches",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "gadgets",
+          "Gadgets"
+        ],
+        [
+          "watches",
+          "Watches"
+        ],
+        [
+          "sunglasses",
+          "Sunglasses"
+        ]
+      ]
+    },
+    {
+      "id": "home2",
+      "name": "Home & Living",
+      "minDiscount": 60,
+      "subs": [
+        [
+          "bedding",
+          "Bedding"
+        ],
+        [
+          "home-decor",
+          "Home Decor"
+        ],
+        [
+          "lamps-and-lighting",
+          "Lamps & Lighting"
+        ],
+        [
+          "kitchen-and-dining",
+          "Kitchen & Dining"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,141 @@
+{
+  "products": [
+    {
+      "productId": 1000,
+      "productName": "Test Tee 1 Cotton",
+      "brand": "TestBrand",
+      "price": 499,
+      "mrp": 1999,
+      "searchImage": "https://example.com/img0.jpg",
+      "landingPageUrl": "testbrand/test-tee-1/1000",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1001,
+      "productName": "Test Tee 2 Cotton",
+      "brand": "TestBrand",
+      "price": 509,
+      "mrp": 2009,
+      "searchImage": "https://example.com/img1.jpg",
+      "landingPageUrl": "testbrand/test-tee-2/1001",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1002,
+      "productName": "Test Tee 3 Cotton",
+      "brand": "TestBrand",
+      "price": 519,
+      "mrp": 2019,
+      "searchImage": "https://example.com/img2.jpg",
+      "landingPageUrl": "testbrand/test-tee-3/1002",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1003,
+      "productName": "Test Tee 4 Cotton",
+      "brand": "TestBrand",
+      "price": 529,
+      "mrp": 2029,
+      "searchImage": "https://example.com/img3.jpg",
+      "landingPageUrl": "testbrand/test-tee-4/1003",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1004,
+      "productName": "Test Tee 5 Cotton",
+      "brand": "TestBrand",
+      "price": 539,
+      "mrp": 2039,
+      "searchImage": "https://example.com/img4.jpg",
+      "landingPageUrl": "testbrand/test-tee-5/1004",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1005,
+      "productName": "Test Tee 6 Cotton",
+      "brand": "TestBrand",
+      "price": 549,
+      "mrp": 2049,
+      "searchImage": "https://example.com/img5.jpg",
+      "landingPageUrl": "testbrand/test-tee-6/1005",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1006,
+      "productName": "Test Tee 7 Cotton",
+      "brand": "TestBrand",
+      "price": 559,
+      "mrp": 2059,
+      "searchImage": "https://example.com/img6.jpg",
+      "landingPageUrl": "testbrand/test-tee-7/1006",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1007,
+      "productName": "Test Tee 8 Cotton",
+      "brand": "TestBrand",
+      "price": 569,
+      "mrp": 2069,
+      "searchImage": "https://example.com/img7.jpg",
+      "landingPageUrl": "testbrand/test-tee-8/1007",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1008,
+      "productName": "Test Tee 9 Cotton",
+      "brand": "TestBrand",
+      "price": "\u20b9579",
+      "mrp": "\u20b92,079",
+      "searchImage": "https://example.com/img8.jpg",
+      "landingPageUrl": "testbrand/test-tee-9/1008",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ]
+    },
+    {
+      "productId": 1009,
+      "product": "Test Kurta Floral",
+      "brand": "TestBrand",
+      "price": "\u20b9899",
+      "mrp": "\u20b92,999",
+      "searchImage": "https://example.com/img9.jpg",
+      "landingPageUrl": "testbrand/test-kurta/1009",
+      "inventoryInfo": []
+    }
+  ],
+  "reduxHtml": "<html><script>window.__REDUX_STATE__ = {\"layoutEnginev2\": {\"pages\": {\"p1\": {\"response\": {\"page\": {\"layout\": {\"components\": [{\"itemData\": {\"data\": {\"styleId\": \"2001\", \"productInfo\": {\"brand\": \"ReduxBrand\", \"additionalInfo\": \"Redux Dress\", \"priceInfo\": {\"price\": \"\\u20b9699\", \"mrp\": \"\\u20b91,999\"}}, \"productImage\": {\"productMedia\": [{\"src\": \"https://example.com/r1.jpg\"}]}, \"onPress\": {\"route\": \"/reduxbrand/redux-dress/2001\"}}}}, {\"itemData\": {\"data\": {\"styleId\": \"2002\", \"productInfo\": {\"brand\": \"ReduxBrand\", \"additionalInfo\": \"Redux Shoes\", \"priceInfo\": {\"price\": 1299, \"mrp\": 2599}}, \"productImage\": {\"productMedia\": [{\"src\": \"https://example.com/r2.jpg\"}]}, \"onPress\": {\"route\": \"/reduxbrand/redux-shoes/2002\"}}}}, {\"itemData\": {\"data\": {\"styleId\": \"2003\", \"productInfo\": {\"brand\": \"ReduxBrand\", \"additionalInfo\": \"Redux Watch\", \"priceInfo\": {\"price\": 999, \"mrp\": 4999}}, \"productImage\": {\"productMedia\": [{\"src\": \"https://example.com/r3.jpg\"}]}, \"onPress\": {\"route\": \"/reduxbrand/redux-watch/2003\"}}}}]}}}}}}}</script></html>"
+}

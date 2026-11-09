@@ -14,7 +14,14 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const debounce = (f, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
 
-  const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+  // Prices arrive as numbers, formatted strings ("₹1,999"), or objects
+  // ({discountedPrice}, {value}, {min,max} ranges). An object used to
+  // stringify to "[object Object]", match no digits, and parse as ₹0, so
+  // the item was dropped in normalise() — exactly the shape the deepest
+  // discounts come in. price() takes the selling (lowest) value of a
+  // range; priceHi() takes the highest value and is for MRP only.
+  const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['discountedPrice', 'value', 'amount', 'min', 'max', 'text', 'defaultValue']) { const p = price(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+  const priceHi = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['value', 'amount', 'max', 'mrp', 'discountedPrice', 'min', 'text', 'defaultValue']) { const p = priceHi(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
   const guessBrand = t => (String(t).trim().split(/\s+/)[0] || '').replace(/[^\w&'-]/g, '');
   const EXCLUDED = [];
   const allowed = p => { const t = p.title.toLowerCase(); return !EXCLUDED.some(k => t.includes(k)); };
@@ -29,45 +36,163 @@
     { id: "kids", name: "Kids", subs: [["kids-tshirts", "Kids T-shirts"], ["boys-clothing", "Boys Clothing"], ["girls-clothing", "Girls Clothing"]] },
     { id: "beauty", name: "Beauty", subs: [["lipstick", "Lipstick"], ["face-moisturisers", "Face Moisturisers"], ["perfumes", "Perfumes"], ["skin-care", "Skin Care"]] },
     { id: "acc", name: "Accessories", subs: [["men-watches", "Men Watches"], ["women-watches", "Women Watches"], ["men-wallets", "Men Wallets"], ["women-handbags", "Women Handbags"], ["women-jewellery", "Women Jewellery"], ["sunglasses", "Sunglasses"], ["backpacks", "Backpacks"]] },
-    { id: "home", name: "Home & Gadgets", subs: [["bedsheets", "Bedsheets"], ["home-decor", "Home Decor"], ["headphones", "Headphones"], ["smart-wearables", "Smart Wearables"]] }
+    { id: "home", name: "Home & Gadgets", subs: [["bedsheets", "Bedsheets"], ["home-decor", "Home Decor"], ["headphones", "Headphones"], ["smart-wearables", "Smart Wearables"]] },
+    { id: "care", name: "Personal Care", subs: [["personal-care", "Personal Care"], ["bath-and-body", "Bath & Body"]] },
+    { id: "gadgets", name: "Gadgets & Watches", subs: [["gadgets", "Gadgets"], ["watches", "Watches"], ["sunglasses", "Sunglasses"], ["handbags-and-bags", "Handbags & Bags"]] },
+    { id: "home2", name: "Home & Living", subs: [["bedding", "Bedding"], ["home-decor", "Home Decor"], ["lamps-and-lighting", "Lamps & Lighting"], ["kitchen-and-dining", "Kitchen & Dining"]] }
   ];
+  // ── v2 fetch + parse ──────────────────────────────────────────────
+  // Gateway search items use productName + numeric price/mrp. The listing
+  // pages Myntra serves (desktop __myx, mobile-web __REDUX_STATE__
+  // layoutEngine pages, plain pageStateData) use `product` for the title,
+  // price/mrp as strings, and styleId as the id. normalise() accepts every
+  // shape, and the discount is always recomputed from price vs MRP, never
+  // trusted from the payload, so a stale or missing discount field cannot
+  // blank a card. The one exception: when no usable MRP exists at all
+  // (missing, or stale and below the selling price), the payload's own
+  // discount percentage (number, float or string) is used instead and the
+  // MRP is back-computed from it — otherwise the item came out as 0% off
+  // and the minimum-discount filter silently hid the deepest cuts. Items
+  // are NOT dropped here for being below the user's minimum discount: that
+  // filter lives in filtered(), so the discount selection the user picked
+  // is preserved across scans and re-renders.
   function normalise(x, cat) {
-    const sell = price(x.price), mrp0 = price(x.mrp);
-    if (!x.productName || !sell) return null;
-    const mrp = mrp0 < sell ? sell : mrp0;
-    const inv = x.inventoryInfo || [];
-    const img = String(x.searchImage || (x.images && x.images[0] && x.images[0].src) || '').replace(/^http:/, 'https:');
-    return { id: String(x.productId), title: String(x.productName), brand: String(x.brand || guessBrand(x.productName)), price: sell, mrp,
-      disc: mrp > sell ? Math.round((mrp - sell) / mrp * 100) : 0, save: mrp - sell, img,
-      url: x.landingPageUrl ? 'https://www.myntra.com/' + String(x.landingPageUrl).replace(/^\//, '') : '',
-      inStock: !inv.length || inv.some(s => s.available !== false), cat };
+    if (!x || typeof x !== 'object') return null;
+    const title = x.productName || x.product || x.name;
+    const sell = price(x.price), mrp0 = priceHi(x.mrp != null ? x.mrp : (x.price && x.price.mrp));
+    if (!title || !sell) return null;
+    let mrp = sell, disc = 0;
+    if (mrp0 > sell) { mrp = mrp0; disc = Math.round((mrp - sell) / mrp * 100); }
+    else {
+      const pct = price(x.discount != null ? x.discount : (x.discountPercent != null ? x.discountPercent : x.discountPercentage));
+      if (pct > 0 && pct < 100) { disc = Math.round(pct); mrp = Math.round(sell / (1 - disc / 100)); }
+    }
+    const id = x.productId || x.styleId || x.id;
+    if (!id) return null;
+    const inv = x.inventoryInfo || x.inventory || [];
+    const imgRaw = x.searchImage || (x.images && x.images[0] && (x.images[0].src || x.images[0].url)) || x.image || '';
+    const img = String(imgRaw).replace(/^http:/, 'https:');
+    const route = x.landingPageUrl || x.url || '';
+    const url = route ? 'https://www.myntra.com/' + String(route).replace(/^https?:\/\/[^/]+\//, '').replace(/^\//, '').split('?')[0] : '';
+    let inStock = true;
+    if (Array.isArray(inv) && inv.length) inStock = inv.some(s => s && s.available !== false && s.stockStatus !== 'outOfStock');
+    else if (x.stockStatus) inStock = x.stockStatus !== 'outOfStock';
+    else if (x.outOfStock === true || x.available === false) inStock = false;
+    return { id: String(id), title: String(title), brand: String(x.brand || guessBrand(title)), price: sell, mrp,
+      disc, save: mrp - sell, img, url, inStock, cat };
+  }
+  // Balanced-brace scan: returns the JSON object starting at startIdx, or null.
+  function extractJsonObject(str, startIdx) {
+    let depth = 0, inStr = false, esc2 = false;
+    for (let i = startIdx; i < str.length; i++) {
+      const c = str[i];
+      if (esc2) { esc2 = false; continue; }
+      if (c === '\\') { esc2 = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) return str.slice(startIdx, i + 1); }
+    }
+    return null;
+  }
+  function extractPageProducts(html) {
+    if (!html || typeof html !== 'string') return [];
+    const tryParse = (prefix, pick) => {
+      const idx = html.indexOf(prefix);
+      if (idx < 0) return null;
+      try {
+        const raw = extractJsonObject(html, idx + prefix.length);
+        if (!raw) return null;
+        return pick(JSON.parse(raw));
+      } catch (e) { return null; }
+    };
+    // 1. Desktop listing pages: searchData.results.products
+    let out = tryParse('window.__myx = ', j => (j.searchData && j.searchData.results && j.searchData.results.products) || null);
+    if (out && out.length) return out;
+    // 2. Mobile-web pages: layoutEngine pages -> itemData.data components
+    out = tryParse('window.__REDUX_STATE__ = ', redux => {
+      const pages = (redux && redux.layoutEnginev2 && redux.layoutEnginev2.pages) || {};
+      for (const pageId of Object.keys(pages)) {
+        const comps = ((pages[pageId].response || {}).page || {}).layout;
+        const list = (comps && comps.components) || [];
+        const prods = [];
+        for (const comp of list) {
+          const d = comp && comp.itemData && comp.itemData.data;
+          if (!d || !(d.styleId || d.productInfo)) continue;
+          const info = d.productInfo || {}, pr = info.priceInfo || {};
+          const imgMedia = d.productImage && d.productImage.productMedia;
+          const route = d.onPress && d.onPress.route ? String(d.onPress.route) : '/' + d.styleId;
+          const title = info.additionalInfo ? (String(info.brand || '') + ' ' + info.additionalInfo).trim()
+            : (info.brand || 'Product');
+          prods.push({ productId: d.styleId, brand: info.brand || '', product: title,
+            price: pr.discountedPrice != null ? pr.discountedPrice : pr.price, mrp: pr.mrp,
+            discount: pr.discount != null ? pr.discount : info.discount,
+            searchImage: imgMedia && imgMedia.length ? imgMedia[0].src : '',
+            landingPageUrl: route.replace(/^\//, '').split('?')[0] });
+        }
+        if (prods.length) return prods;
+      }
+      return null;
+    });
+    if (out && out.length) return out;
+    // 3. Plain category pages: pageStateData.products
+    out = tryParse('var pageStateData = { data: ', j => j.products || null);
+    if (out && out.length) return out;
+    return [];
   }
   async function fetchPage(job, page, ctl) {
-    const url = '/gateway/v2/search/' + job.code + '?rows=50&o=' + (page - 1) * 50 + '&sort=discount';
+    const rows = 50;
+    const url = '/gateway/v2/search/' + job.code + '?rows=' + rows + '&o=' + (page - 1) * rows + '&sort=discount';
+    const label = job.g.name + ' › ' + job.name;
+    const toItems = raw => { const items = (raw || []).map(x => normalise(x, label)).filter(Boolean); return items; };
     let lastErr;
     for (let a = 0; a < 3; a++) {
       if (ctl.stop) throw new Error('stopped');
       try {
         const r = await W.fetch(url, { credentials: 'include', headers: { accept: 'application/json' } });
         if (r.status === 429 || r.status >= 500) throw new Error('HTTP ' + r.status);
+        if (r.status === 401 || r.status === 403) return Object.assign([], { more: false, diag: 'auth' });
+        if (r.status === 429) return Object.assign([], { more: false, diag: 'rate' });
+        if (r.status === 401 || r.status === 403) return Object.assign([], { more: false, diag: 'auth' });
+        if (r.status === 429) return Object.assign([], { more: false, diag: 'rate' });
         if (!r.ok) return Object.assign([], { more: false });
+        const ct = (r.headers.get && r.headers.get('content-type')) || '';
+        if (ct.indexOf('json') < 0) {
+          // Gateway answered with a page instead of JSON: parse its embedded data.
+          const items = toItems(extractPageProducts(await r.text()));
+          items.more = false;
+          return items;
+        }
         const j = await r.json();
-        const items = (j.products || []).map(x => normalise(x, job.g.name + ' › ' + job.name)).filter(Boolean);
-        items.more = !!j.hasNextPage;
+        const raw = j.products || (j.searchData && j.searchData.results && j.searchData.results.products) || [];
+        const items = toItems(raw);
+        items.more = j.hasNextPage === true || raw.length === rows;
         return items;
-      } catch (e) { lastErr = e; await sleep(800 * (a + 1)); }
+      } catch (e) { lastErr = e; await sleep(900 * Math.pow(2, a)); }
+    }
+    // Gateway failed after retries: one listing-page attempt (page 1 only),
+    // so a gateway outage does not blank the whole scan.
+    if (page === 1 && !ctl.stop) {
+      try {
+        const fbHeaders = { accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'x-myntraweb': 'Yes', 'x-requested-with': 'browser' };
+        if (store.pin) fbHeaders['x-location-context'] = 'pincode=' + store.pin + ';source=USER_INPUT';
+        const r2 = await W.fetch('https://www.myntra.com/' + job.code + '?sort=discount&p=1',
+          { credentials: 'include', headers: fbHeaders });
+        if (r2.ok) { const items = toItems(extractPageProducts(await r2.text())); items.more = false; return items; }
+      } catch (e) { /* fall through to the gateway error below */ }
     }
     throw lastErr;
   }
   const P = {
     key: 'myn_v1', hostRe: /(^|\.)myntra\.com$/,
-    defaults: { groups: ['men', 'women', 'footwear'], depth: 1 },
+    defaults: { groups: ['men', 'women', 'footwear'], depth: 3 },
     workers: 3,
     jobs: st => { const jobs = []; for (const g of GROUPS) if (st.groups.includes(g.id)) for (const [c, n] of g.subs) jobs.push({ g, name: n, code: c }); return jobs; },
     fetchPage,
     noLocation: () => false, noLocMsg: '',
     locCheck: () => true,
-    locUI: () => '', locInput: () => false
+    locUI: (st, esc) => `<input class="fld" data-in="pin" placeholder="Pincode for listing-page fallback (optional)" value="${esc(st.pin || '')}" autocomplete="off" inputmode="numeric">`,
+    locInput: (k, v) => { if (k === 'pin') { store.pin = String(v).replace(/[^0-9]/g, ''); save(); return true; } return false; }
   };
   // Live data can only be read from the store's own site, inside your logged-in tab.
   const OFFSITE = !P.hostRe.test(location.hostname);
@@ -75,7 +200,7 @@
   const KEY = P.key;
   const defaults = Object.assign({
     theme: 'auto', view: 'grid', sort: 'score', minDisc: 30, maxPrice: 0, depth: 3,
-    stockOnly: true, favs: [], hidden: [], list: {}, prices: {}, lastScan: 0
+    stockOnly: true, favs: [], hidden: [], list: {}, prices: {}, lastScan: 0, pin: ''
   }, P.defaults);
   let store;
   try { store = Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { store = Object.assign({}, defaults); }
@@ -88,7 +213,7 @@
 
   // ───────────────────────── State ─────────────────────────
   const S = { products: new Map(), scanning: false, done: 0, total: 0, errors: 0, ctl: { stop: false },
-    q: '', brand: '', cat: '', preset: '', pick: false, tgm: false, favOnly: false, newOnly: false, shown: 60, tab: 'best', panel: false, startedAt: 0 };
+    q: '', brand: '', cat: '', preset: '', pick: false, tgm: false, favOnly: false, newOnly: false, shown: 60, tab: 'best', panel: false, startedAt: 0, scannedOnce: false, diag: null, selfTest: null };
 
   // ───────────────────────── Scanner ─────────────────────────
   async function scan() {
@@ -98,18 +223,32 @@
     const jobs = P.jobs(store);
     if (!jobs.length) { toast('Pick at least one category'); return; }
     S.scanning = true; S.ctl = { stop: false }; S.done = 0; S.errors = 0; S.total = jobs.length; S.startedAt = Date.now();
+    S.diag = { errors: [], emptyJobs: 0, totalJobs: jobs.length, rateLimited: false, auth: false }; S.scannedOnce = true;
     S.products.clear(); S.shown = 60; render();
     const ctl = S.ctl, queue = jobs.slice();
     const runJob = async job => {
+      let jobEmpty = true;
       try {
         for (let page = 1; page <= store.depth && !ctl.stop; page++) {
           const items = await P.fetchPage(job, page, ctl);
+          if (items.length) jobEmpty = false;
+          if (items.diag === 'auth') S.diag.auth = true;
+          if (items.diag === 'rate') S.diag.rateLimited = true;
           const fresh = ingest(items);
           scheduleRender();
           // Stop on the last page, or when a page adds nothing and does not promise more.
           if (items.more === false || (!fresh && items.more !== true)) break;
         }
-      } catch (e) { if (!ctl.stop) S.errors++; }
+      } catch (e) {
+        if (!ctl.stop) {
+          S.errors++;
+          const m = String((e && e.message) || e);
+          S.diag.errors.push(job.name + ': ' + m);
+          if (/429|rate limit/i.test(m)) S.diag.rateLimited = true;
+          if (/401|403|signed out|session/i.test(m)) S.diag.auth = true;
+        }
+      }
+      if (jobEmpty) S.diag.emptyJobs++;
       S.done++; scheduleRender();
     };
     // The first request finds the right data centre; then the workers run in parallel.
@@ -121,7 +260,60 @@
     store.lastScan = Date.now(); save(); render();
     notify();
     if (P.noLocation() && !S.products.size) { toast(P.noLocMsg); return; }
+    if (!S.products.size && !ctl.stop) { toast('No deals found — reload myntra.com and scan again, or lower Min discount.'); return; }
     toast(ctl.stop ? 'Scan stopped' : `Scan complete · ${S.products.size} products` + (S.errors ? ` · ${S.errors} failed` : ''));
+  }
+
+  // ── v2 diagnostics + self-test ────────────────────────────────────
+  // Pure: why did a scan return 0 results? diag = {errors, emptyJobs,
+  // totalJobs, rateLimited, auth}; opts = {platform, pincodeSaved}.
+  function diagnoseEmpty(diag, opts) {
+    opts = opts || {};
+    const out = [];
+    if (!diag) return out;
+    if (diag.auth) out.push('The store refused the request (signed out or session expired) — reload ' + (opts.platform || 'the store') + ' and scan again.');
+    if (diag.rateLimited) out.push('Rate-limited by the store (too many requests) — wait a few minutes before scanning again.');
+    if (diag.errors && diag.errors.length) out.push(diag.errors.length + ' categor' + (diag.errors.length === 1 ? 'y' : 'ies') + ' failed to load: ' + diag.errors.slice(0, 3).join('; ') + (diag.errors.length > 3 ? '…' : ''));
+    if (diag.emptyJobs && diag.emptyJobs === diag.totalJobs) out.push('Every category came back empty — the categories may genuinely have no deals at this discount, or the store is showing a different location.');
+    if (opts.pincodeSaved === false) out.push('No pincode is saved on the store — set your delivery pincode on the store first, then scan again.');
+    if (!out.length) out.push('No deals matched at the current minimum discount — lower Min discount in the menu or pick more categories.');
+    return out;
+  }
+  function diagView() {
+    const reasons = diagnoseEmpty(S.diag, { platform: PLATFORM, pincodeSaved: typeof cromaPinSaved === 'function' ? cromaPinSaved() : undefined });
+    const st = S.selfTest;
+    return `<div class="check"><h3>No deals found — here is why</h3>${reasons.map(r => `<div class="ck no"><span>${ic('info', 15)}</span><div><b>${esc(r)}</b></div></div>`).join('')}${st ? `<div class="ck ${st.pass ? 'ok' : 'no'}"><span>${ic(st.pass ? 'check' : 'x', 15)}</span><div><b>Self-test: ${st.pass ? 'PASS' : 'FAIL'} — ${esc(st.summary)}</b><p>${esc(st.detail)}</p></div></div>` : ''}<button class="btn" data-act="scan" style="margin-top:16px">${ic('scan')}Scan again</button><button class="btn ghost full" data-act="selftest" style="margin-top:8px">Run self-test</button></div>`;
+  }
+  // Built-in self-test: runs the parser on small inline samples (no
+  // network) and reports PASS/FAIL. Same checks run offline as
+  // node test-results-tab.js.
+  function runSelfTest() {
+    const lines = [];
+    let pass = 0, total = 0;
+    const check = (name, ok) => { total++; if (ok) pass++; lines.push((ok ? '✓ ' : '✗ ') + name); };
+    try {
+      const gw = [
+        { productId: 1, productName: 'Self-Test Tee', brand: 'Test', price: 499, mrp: 1999, searchImage: 'https://example.com/a.jpg', landingPageUrl: 'test/self-test-tee/1', inventoryInfo: [{ available: true }] },
+        { productId: 2, product: 'Self-Test Kurta', brand: 'Test', price: '₹899', mrp: '₹2,999', searchImage: 'https://example.com/b.jpg', landingPageUrl: 'test/self-test-kurta/2' },
+        { productId: 3, productName: 'Self-Test Max Tee', brand: 'Test', price: 99, discount: 95, searchImage: 'https://example.com/c.jpg', landingPageUrl: 'test/self-test-max-tee/3', inventoryInfo: [{ available: true }] },
+        { productId: 4, productName: 'Self-Test Range Tee', brand: 'Test', price: { discountedPrice: 99, mrp: 1999 }, searchImage: 'https://example.com/d.jpg', landingPageUrl: 'test/self-test-range-tee/4', inventoryInfo: [{ available: true }] }
+      ];
+      const parsed = gw.map(x => normalise(x, 'Self-test')).filter(Boolean);
+      check('gateway + string-price items parse (' + parsed.length + '/4)', parsed.length === 4);
+      check('discount recomputed (75%)', parsed[0] && parsed[0].disc === 75);
+      check('missing-MRP item keeps its 95% discount', parsed[2] && parsed[2].disc === 95);
+      check('object-price item parses (95%)', parsed[3] && parsed[3].disc === 95);
+      check('product URL built', parsed[0] && parsed[0].url === 'https://www.myntra.com/test/self-test-tee/1');
+      const reduxObj = {"layoutEnginev2": {"pages": {"p1": {"response": {"page": {"layout": {"components": [{"itemData": {"data": {"styleId": "9", "productInfo": {"brand": "Test", "additionalInfo": "Redux Dress", "priceInfo": {"price": "\u20b9699", "mrp": "\u20b91,999"}}, "productImage": {"productMedia": [{"src": "https://example.com/r.jpg"}]}, "onPress": {"route": "/test/redux-dress/9"}}}}, {"itemData": {"data": {"styleId": "10", "productInfo": {"brand": "Test", "additionalInfo": "Redux Max Tee", "priceInfo": {"discountedPrice": 99, "mrp": 1999}}, "productImage": {"productMedia": [{"src": "https://example.com/r2.jpg"}]}, "onPress": {"route": "/test/redux-max-tee/10"}}}}]}}}}}}};
+      const reduxHtml = '<script>window.__REDUX_STATE__ = ' + JSON.stringify(reduxObj) + '</script>';
+      const redux = extractPageProducts(reduxHtml).map(x => normalise(x, 'Self-test')).filter(Boolean);
+      check('mobile-web Redux page items parse (' + redux.length + '/2)', redux.length === 2);
+      check('Redux discountedPrice item parses (95%)', redux[1] && redux[1].disc === 95);
+    } catch (e) { lines.push('✗ self-test threw: ' + e.message); }
+    S.selfTest = { pass: pass === total, summary: pass + '/' + total + ' checks passed', detail: lines.join(' · ') };
+    toast(S.selfTest.pass ? 'Self-test PASS: ' + S.selfTest.summary : 'Self-test FAIL: ' + S.selfTest.summary);
+    render();
+    return S.selfTest;
   }
 
   // ───────────────────────── Filtering ─────────────────────────
@@ -492,7 +684,7 @@ kbd{border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11px;fo
   <label class="sw" style="margin-top:16px"><input type="checkbox" data-in="stockOnly" ${store.stockOnly ? 'checked' : ''}> In stock only</label>
   <label class="sw" style="margin-top:10px"><input type="checkbox" data-in="favOnly" ${S.favOnly ? 'checked' : ''}> Saved only</label>
   <label class="sw" style="margin-top:10px"><input type="checkbox" data-in="newOnly" ${S.newOnly ? 'checked' : ''}> New or price dropped</label></div>
- <div><h4>${ic('download', 15)}Export</h4><div class="chips"><button class="chip" data-act="csv">${ic('download', 14)}CSV</button><button class="chip" data-act="copyall">${ic('copy', 14)}Copy top 20</button><button class="chip" data-act="unhide">${ic('eyeoff', 14)}Unhide (${store.hidden.length})</button></div>
+ <div><h4>${ic('download', 15)}Export</h4><div class="chips"><button class="chip" data-act="csv">${ic('download', 14)}CSV</button><button class="chip" data-act="json">${ic('download', 14)}JSON</button><button class="chip" data-act="selftest">${ic('check', 14)}Self-test</button><button class="chip" data-act="copyall">${ic('copy', 14)}Copy top 20</button><button class="chip" data-act="unhide">${ic('eyeoff', 14)}Unhide (${store.hidden.length})</button></div>
   <p class="note" style="margin-top:14px"><kbd>/</kbd> search &nbsp;<kbd>S</kbd> scan &nbsp;<kbd>Esc</kbd> close</p></div>
 </aside>`;
   }
@@ -547,7 +739,7 @@ kbd{border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11px;fo
   }
   function mainView() {
     if (OFFSITE) return `<main id="main">${offsiteCard()}</main>`;
-    if (!S.products.size && !S.scanning) return `<main id="main">${checklist()}</main>`;
+    if (!S.products.size && !S.scanning) return `<main id="main">${S.scannedOnce ? diagView() : checklist()}</main>`;
     const list = filtered();
     const tabs = [['best', 'Best deals'], ['all', 'All deals'], ['saved', 'Saved' + (store.favs.length ? ' · ' + store.favs.length : '')]];
     const head = `<div class="tabs">${tabs.map(([k, l]) => `<button class="${S.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">${l}</button>`).join('')}${S.scanning ? `<span class="live">${ic('scan', 14)}Scanning ${S.done}/${S.total}</span>` : ''}</div>`;
@@ -607,6 +799,10 @@ kbd{border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11px;fo
   async function copy(text, msg) {
     try { await navigator.clipboard.writeText(text); toast(msg || 'Copied'); }
     catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast(msg || 'Copied'); }
+  }
+  // JSON export of the currently filtered deals (CSV already exists).
+  function jsonExport(list) {
+    return JSON.stringify(list.map(p => ({ title: p.title, brand: p.brand, category: p.cat, price: p.price, mrp: p.mrp, discount: p.disc, saving: p.save, inStock: p.inStock, url: p.url })), null, 2);
   }
   function listText() {
     const lines = Object.entries(store.list).map(([id, q]) => { const p = S.products.get(id) || (store._cache && store._cache[id]); return p ? `- ${p.title} x${q}: ${$inr(p.price * q)}${p.url ? '\n  ' + p.url : ''}` : null; }).filter(Boolean);
@@ -724,6 +920,7 @@ kbd{border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11px;fo
       case 'tgtest': tgTest(); break;
       case 'bell': case 'tgopen': sideOpen = false; S.pick = false; S.tgm = true; render(); break;
       case 'tgclose': S.tgm = false; render(); break;
+      case 'selftest': runSelfTest(); break;
       case 'view': store.view = el.dataset.v; save(); render(); break;
       case 'more': S.shown += 60; render(); break;
       case 'fav':
@@ -746,6 +943,9 @@ kbd{border:1px solid var(--bd);border-radius:5px;padding:0 5px;font-size:11px;fo
         const rows = [['Title', 'Brand', 'Category', 'Price', 'MRP', 'Discount %', 'Saving', 'In stock', 'URL']].concat(filtered().map(p => [p.title, p.brand, p.cat, p.price, p.mrp, p.disc, p.save, p.inStock, p.url]));
         const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
         const a2 = document.createElement('a'); a2.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a2.download = 'myntra-deals.csv'; a2.click(); toast('CSV downloaded'); break;
+      }
+      case 'json': {
+        const a3 = document.createElement('a'); a3.href = URL.createObjectURL(new Blob([jsonExport(filtered())], { type: 'application/json' })); a3.download = 'myntra-deals.json'; a3.click(); toast('JSON downloaded'); break;
       }
     }
   });
