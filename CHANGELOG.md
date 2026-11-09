@@ -1,6 +1,7 @@
 # Changelog
 
 ## v2.0.0 — 2026-11-08
+- Fixed (2026-11-09): install button now reads “Myntra Deals” instead of the generic “PriceDrop Hunter”, so the dragged bookmark is named after this store instead of colliding with every other tool.
 
 - Fetch + parse rewritten: gateway search API kept as primary source; listing-page fallback added (desktop `__myx`, mobile-web `__REDUX_STATE__` layoutEngine pages, `pageStateData`).
 - Parser accepts `productName`/`product` titles, numeric or string prices/MRP, and `searchImage`/`images[0]`; discount always recomputed from price vs MRP.

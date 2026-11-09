@@ -15,6 +15,7 @@ Scans the Myntra categories you pick, sorted by discount, and shows the biggest 
 - **Blank-results fix:** the parser no longer drops string-priced, `product`-field or page-data items, and an empty scan now says why (reload the store / lower Min discount) instead of showing a bare "0 products".
 - **Telegram bot (new, `bot/`):** Node bot using the same gateway API, with the same listing-page fallback. See Bot setup below.
 - **Regression test:** `node test-results-tab.js` checks 10 gateway items + 3 mobile-web page items all parse and render as cards (see Testing).
+- **Bookmark name fixed:** the install button now reads **Myntra Deals** instead of the generic “PriceDrop Hunter”, so the bookmark you drag to your bookmarks bar is named after this store.
 
 ## Why v2 is stronger
 
@@ -46,9 +47,9 @@ Scans the Myntra categories you pick, sorted by discount, and shows the biggest 
 
 [Watch the walkthrough video (MP4)](https://stymrj.github.io/PriceDrop-Hunter/media/install-demo.mp4)
 
-**Bookmarklet (desktop).** Run `node build.js`, open `index.html`, and drag the button to your bookmarks bar. Open myntra.com and click the bookmark.
+**Bookmarklet (desktop).** Run `node build.js`, open `index.html`, and drag the **Myntra Deals** button to your bookmarks bar. Open myntra.com and click the bookmark.
 
-**Bookmarklet (mobile).** On the install page, tap **Copy mobile loader**. It is a bookmark of about 380 characters that loads the latest version from GitHub Pages, so it fits on any phone. Create a bookmark, paste it as the address, and run it from the address bar on myntra.com. The full bookmarklet (about 45 KB, no network needed) is in `dist/bookmarklet.txt`.
+**Bookmarklet (mobile).** On the install page, tap **Copy mobile loader**. It is a bookmark of about 380 characters that loads the latest version from GitHub Pages, so it fits on any phone. Create a bookmark named **Myntra Deals**, paste it as the address, and run it from the address bar on myntra.com. The full bookmarklet (about 45 KB, no network needed) is in `dist/bookmarklet.txt`.
 
 **Userscript.** Install `dist/myntra-deals.user.js` in Tampermonkey or Violentmonkey. A small Deals button appears on every myntra.com page.
 
