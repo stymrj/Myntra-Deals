@@ -8,7 +8,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const price = v => {
   if (v == null) return 0;
   if (typeof v === 'number') return v;
-  if (typeof v === 'object') { for (const k of ['value', 'amount', 'text', 'defaultValue']) { const p = price(v[k]); if (p > 0) return p; } return 0; }
+  if (typeof v === 'object') { for (const k of ['discountedPrice', 'value', 'amount', 'min', 'max', 'text', 'defaultValue']) { const p = price(v[k]); if (p > 0) return p; } return 0; }
   const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/);
   return m ? +m[0] : 0;
 };
@@ -118,8 +118,12 @@ async function run(platform, argv = process.argv.slice(2)) {
       }
       for (const p of items) { if (!found.has(p.id) || job.min < found.get(p.id).min) found.set(p.id, Object.assign(p, { min: job.min })); }
       if (items.more === false || !items.length) break;
-      // Only stores that return results sorted by discount can stop early.
-      if (platform.sortedByDiscount && (items.length < (platform.pageSize || 10) || items[items.length - 1].disc < job.min)) break;
+      // Only stores that return results sorted by discount can stop early — and
+      // only on the last item's (correctly parsed) discount, never on page
+      // length: a page shortened by dropped items is not the last page, and
+      // stopping there skipped every deeper page where the biggest
+      // discounts can sit.
+      if (platform.sortedByDiscount && items.length && items[items.length - 1].disc < job.min) break;
     }
   });
   if (blocked) console.error('Stopped: ' + blocked);

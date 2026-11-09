@@ -1,0 +1,226 @@
+{
+  "products": [
+    {
+      "id": "M1",
+      "productId": 1,
+      "productName": "M1 Tee",
+      "brand": "T",
+      "price": 300,
+      "mrp": 2000,
+      "searchImage": "",
+      "landingPageUrl": "t/m1/1",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 85,
+      "expectedInStock": true
+    },
+    {
+      "id": "M2",
+      "productId": 2,
+      "productName": "M2 Tee",
+      "brand": "T",
+      "price": "₹199",
+      "mrp": "₹1,999",
+      "searchImage": "",
+      "landingPageUrl": "t/m2/2",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 90,
+      "expectedInStock": true
+    },
+    {
+      "id": "M3",
+      "productId": 3,
+      "productName": "M3 Tee",
+      "brand": "T",
+      "price": 99,
+      "discount": 95,
+      "searchImage": "",
+      "landingPageUrl": "t/m3/3",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    },
+    {
+      "id": "M4",
+      "productId": 4,
+      "productName": "M4 Tee",
+      "brand": "T",
+      "price": 199,
+      "discount": "90",
+      "searchImage": "",
+      "landingPageUrl": "t/m4/4",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 90,
+      "expectedInStock": true
+    },
+    {
+      "id": "M5",
+      "productId": 5,
+      "productName": "M5 Tee",
+      "brand": "T",
+      "price": 249,
+      "discount": 87.5,
+      "searchImage": "",
+      "landingPageUrl": "t/m5/5",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 88,
+      "expectedInStock": true
+    },
+    {
+      "id": "M6",
+      "productId": 6,
+      "productName": "M6 Tee",
+      "brand": "T",
+      "price": {
+        "discountedPrice": 99,
+        "mrp": 1999
+      },
+      "searchImage": "",
+      "landingPageUrl": "t/m6/6",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    },
+    {
+      "id": "M7",
+      "productId": 7,
+      "productName": "M7 Tee",
+      "brand": "T",
+      "price": {
+        "min": 99,
+        "max": 499
+      },
+      "mrp": 1999,
+      "searchImage": "",
+      "landingPageUrl": "t/m7/7",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    },
+    {
+      "id": "M8",
+      "productId": 8,
+      "productName": "M8 Tee",
+      "brand": "T",
+      "price": 99,
+      "mrp": 1999,
+      "searchImage": "",
+      "landingPageUrl": "t/m8/8",
+      "inventoryInfo": [
+        {
+          "available": false,
+          "stockStatus": "outOfStock"
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": false
+    },
+    {
+      "id": "M9",
+      "productId": 9,
+      "productName": "M9 Tee",
+      "brand": "T",
+      "price": 99,
+      "mrp": "₹1,999",
+      "searchImage": "",
+      "landingPageUrl": "t/m9/9",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    },
+    {
+      "id": "M10",
+      "productId": 10,
+      "productName": "M10 Tee",
+      "brand": "T",
+      "price": 99,
+      "mrp": 50,
+      "discount": 95,
+      "searchImage": "",
+      "landingPageUrl": "t/m10/10",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    },
+    {
+      "id": "M11",
+      "productId": 11,
+      "productName": "M11 Tee",
+      "brand": "T",
+      "price": 99,
+      "searchImage": "",
+      "landingPageUrl": "t/m11/11",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 0,
+      "expectedInStock": true
+    },
+    {
+      "id": "M12",
+      "productId": 12,
+      "productName": "M12 Tee",
+      "brand": "T",
+      "price": {
+        "value": 99
+      },
+      "mrp": {
+        "value": 1999
+      },
+      "searchImage": "",
+      "landingPageUrl": "t/m12/12",
+      "inventoryInfo": [
+        {
+          "available": true
+        }
+      ],
+      "expectedDisc": 95,
+      "expectedInStock": true
+    }
+  ],
+  "reduxHtml": "<script>window.__REDUX_STATE__ = {\"layoutEnginev2\":{\"pages\":{\"p1\":{\"response\":{\"page\":{\"layout\":{\"components\":[{\"itemData\":{\"data\":{\"styleId\":\"3001\",\"productInfo\":{\"brand\":\"T\",\"additionalInfo\":\"Redux Max Tee\",\"priceInfo\":{\"discountedPrice\":99,\"mrp\":1999}},\"productImage\":{\"productMedia\":[{\"src\":\"https://example.com/r.jpg\"}]},\"onPress\":{\"route\":\"/t/redux-max-tee/3001\"}}}}]}}}}}}}</script>",
+  "reduxExpected": [
+    {
+      "title": "T Redux Max Tee",
+      "disc": 95,
+      "inStock": true
+    }
+  ]
+}

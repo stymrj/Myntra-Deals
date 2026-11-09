@@ -14,7 +14,14 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const debounce = (f, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
 
-  const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+  // Prices arrive as numbers, formatted strings ("₹1,999"), or objects
+  // ({discountedPrice}, {value}, {min,max} ranges). An object used to
+  // stringify to "[object Object]", match no digits, and parse as ₹0, so
+  // the item was dropped in normalise() — exactly the shape the deepest
+  // discounts come in. price() takes the selling (lowest) value of a
+  // range; priceHi() takes the highest value and is for MRP only.
+  const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['discountedPrice', 'value', 'amount', 'min', 'max', 'text', 'defaultValue']) { const p = price(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+  const priceHi = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['value', 'amount', 'max', 'mrp', 'discountedPrice', 'min', 'text', 'defaultValue']) { const p = priceHi(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
   const guessBrand = t => (String(t).trim().split(/\s+/)[0] || '').replace(/[^\w&'-]/g, '');
   const EXCLUDED = [];
   const allowed = p => { const t = p.title.toLowerCase(); return !EXCLUDED.some(k => t.includes(k)); };
@@ -41,15 +48,25 @@
   // price/mrp as strings, and styleId as the id. normalise() accepts every
   // shape, and the discount is always recomputed from price vs MRP, never
   // trusted from the payload, so a stale or missing discount field cannot
-  // blank a card. Items are NOT dropped here for being below the user's
-  // minimum discount: that filter lives in filtered(), so the discount
-  // selection the user picked is preserved across scans and re-renders.
+  // blank a card. The one exception: when no usable MRP exists at all
+  // (missing, or stale and below the selling price), the payload's own
+  // discount percentage (number, float or string) is used instead and the
+  // MRP is back-computed from it — otherwise the item came out as 0% off
+  // and the minimum-discount filter silently hid the deepest cuts. Items
+  // are NOT dropped here for being below the user's minimum discount: that
+  // filter lives in filtered(), so the discount selection the user picked
+  // is preserved across scans and re-renders.
   function normalise(x, cat) {
     if (!x || typeof x !== 'object') return null;
     const title = x.productName || x.product || x.name;
-    const sell = price(x.price), mrp0 = price(x.mrp);
+    const sell = price(x.price), mrp0 = priceHi(x.mrp != null ? x.mrp : (x.price && x.price.mrp));
     if (!title || !sell) return null;
-    const mrp = mrp0 < sell ? sell : mrp0;
+    let mrp = sell, disc = 0;
+    if (mrp0 > sell) { mrp = mrp0; disc = Math.round((mrp - sell) / mrp * 100); }
+    else {
+      const pct = price(x.discount != null ? x.discount : (x.discountPercent != null ? x.discountPercent : x.discountPercentage));
+      if (pct > 0 && pct < 100) { disc = Math.round(pct); mrp = Math.round(sell / (1 - disc / 100)); }
+    }
     const id = x.productId || x.styleId || x.id;
     if (!id) return null;
     const inv = x.inventoryInfo || x.inventory || [];
@@ -62,7 +79,7 @@
     else if (x.stockStatus) inStock = x.stockStatus !== 'outOfStock';
     else if (x.outOfStock === true || x.available === false) inStock = false;
     return { id: String(id), title: String(title), brand: String(x.brand || guessBrand(title)), price: sell, mrp,
-      disc: mrp > sell ? Math.round((mrp - sell) / mrp * 100) : 0, save: mrp - sell, img, url, inStock, cat };
+      disc, save: mrp - sell, img, url, inStock, cat };
   }
   // Balanced-brace scan: returns the JSON object starting at startIdx, or null.
   function extractJsonObject(str, startIdx) {
@@ -108,7 +125,9 @@
           const title = info.additionalInfo ? (String(info.brand || '') + ' ' + info.additionalInfo).trim()
             : (info.brand || 'Product');
           prods.push({ productId: d.styleId, brand: info.brand || '', product: title,
-            price: pr.price, mrp: pr.mrp, searchImage: imgMedia && imgMedia.length ? imgMedia[0].src : '',
+            price: pr.discountedPrice != null ? pr.discountedPrice : pr.price, mrp: pr.mrp,
+            discount: pr.discount != null ? pr.discount : info.discount,
+            searchImage: imgMedia && imgMedia.length ? imgMedia[0].src : '',
             landingPageUrl: route.replace(/^\//, '').split('?')[0] });
         }
         if (prods.length) return prods;
@@ -275,16 +294,21 @@
     try {
       const gw = [
         { productId: 1, productName: 'Self-Test Tee', brand: 'Test', price: 499, mrp: 1999, searchImage: 'https://example.com/a.jpg', landingPageUrl: 'test/self-test-tee/1', inventoryInfo: [{ available: true }] },
-        { productId: 2, product: 'Self-Test Kurta', brand: 'Test', price: '₹899', mrp: '₹2,999', searchImage: 'https://example.com/b.jpg', landingPageUrl: 'test/self-test-kurta/2' }
+        { productId: 2, product: 'Self-Test Kurta', brand: 'Test', price: '₹899', mrp: '₹2,999', searchImage: 'https://example.com/b.jpg', landingPageUrl: 'test/self-test-kurta/2' },
+        { productId: 3, productName: 'Self-Test Max Tee', brand: 'Test', price: 99, discount: 95, searchImage: 'https://example.com/c.jpg', landingPageUrl: 'test/self-test-max-tee/3', inventoryInfo: [{ available: true }] },
+        { productId: 4, productName: 'Self-Test Range Tee', brand: 'Test', price: { discountedPrice: 99, mrp: 1999 }, searchImage: 'https://example.com/d.jpg', landingPageUrl: 'test/self-test-range-tee/4', inventoryInfo: [{ available: true }] }
       ];
       const parsed = gw.map(x => normalise(x, 'Self-test')).filter(Boolean);
-      check('gateway + string-price items parse (' + parsed.length + '/2)', parsed.length === 2);
+      check('gateway + string-price items parse (' + parsed.length + '/4)', parsed.length === 4);
       check('discount recomputed (75%)', parsed[0] && parsed[0].disc === 75);
+      check('missing-MRP item keeps its 95% discount', parsed[2] && parsed[2].disc === 95);
+      check('object-price item parses (95%)', parsed[3] && parsed[3].disc === 95);
       check('product URL built', parsed[0] && parsed[0].url === 'https://www.myntra.com/test/self-test-tee/1');
-      const reduxObj = {"layoutEnginev2": {"pages": {"p1": {"response": {"page": {"layout": {"components": [{"itemData": {"data": {"styleId": "9", "productInfo": {"brand": "Test", "additionalInfo": "Redux Dress", "priceInfo": {"price": "\u20b9699", "mrp": "\u20b91,999"}}, "productImage": {"productMedia": [{"src": "https://example.com/r.jpg"}]}, "onPress": {"route": "/test/redux-dress/9"}}}}]}}}}}}};
+      const reduxObj = {"layoutEnginev2": {"pages": {"p1": {"response": {"page": {"layout": {"components": [{"itemData": {"data": {"styleId": "9", "productInfo": {"brand": "Test", "additionalInfo": "Redux Dress", "priceInfo": {"price": "\u20b9699", "mrp": "\u20b91,999"}}, "productImage": {"productMedia": [{"src": "https://example.com/r.jpg"}]}, "onPress": {"route": "/test/redux-dress/9"}}}}, {"itemData": {"data": {"styleId": "10", "productInfo": {"brand": "Test", "additionalInfo": "Redux Max Tee", "priceInfo": {"discountedPrice": 99, "mrp": 1999}}, "productImage": {"productMedia": [{"src": "https://example.com/r2.jpg"}]}, "onPress": {"route": "/test/redux-max-tee/10"}}}}]}}}}}}};
       const reduxHtml = '<script>window.__REDUX_STATE__ = ' + JSON.stringify(reduxObj) + '</script>';
       const redux = extractPageProducts(reduxHtml).map(x => normalise(x, 'Self-test')).filter(Boolean);
-      check('mobile-web Redux page items parse (' + redux.length + '/1)', redux.length === 1);
+      check('mobile-web Redux page items parse (' + redux.length + '/2)', redux.length === 2);
+      check('Redux discountedPrice item parses (95%)', redux[1] && redux[1].disc === 95);
     } catch (e) { lines.push('✗ self-test threw: ' + e.message); }
     S.selfTest = { pass: pass === total, summary: pass + '/' + total + ' checks passed', detail: lines.join(' · ') };
     toast(S.selfTest.pass ? 'Self-test PASS: ' + S.selfTest.summary : 'Self-test FAIL: ' + S.selfTest.summary);

@@ -4,21 +4,27 @@
 // Node 18+, no dependencies.
 'use strict';
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+const price = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['discountedPrice', 'value', 'amount', 'min', 'max', 'text', 'defaultValue']) { const p = price(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
+const priceHi = v => { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'object') { for (const k of ['value', 'amount', 'max', 'mrp', 'discountedPrice', 'min', 'text', 'defaultValue']) { const p = priceHi(v[k]); if (p > 0) return p; } return 0; } const m = String(v).replace(/,/g, '').match(/\d+(\.\d+)?/); return m ? +m[0] : 0; };
 const brandOf = t => (String(t).trim().split(/\s+/)[0] || '').replace(/[^\w&'-]/g, '');
 function normalise(x, cat) {
   if (!x || typeof x !== 'object') return null;
   const title = x.productName || x.product || x.name;
-  const sell = price(x.price), mrp0 = price(x.mrp);
+  const sell = price(x.price), mrp0 = priceHi(x.mrp != null ? x.mrp : (x.price && x.price.mrp));
   if (!title || !sell) return null;
-  const mrp = mrp0 < sell ? sell : mrp0;
+  let mrp = sell, disc = 0;
+  if (mrp0 > sell) { mrp = mrp0; disc = Math.round((mrp - sell) / mrp * 100); }
+  else { // No usable MRP: fall back to the payload's own discount % (see src/deals.js).
+    const pct = price(x.discount != null ? x.discount : (x.discountPercent != null ? x.discountPercent : x.discountPercentage));
+    if (pct > 0 && pct < 100) { disc = Math.round(pct); mrp = Math.round(sell / (1 - disc / 100)); }
+  }
   const id = x.productId || x.styleId || x.id;
   if (!id) return null;
   const imgRaw = x.searchImage || (x.images && x.images[0] && (x.images[0].src || x.images[0].url)) || '';
   const route = x.landingPageUrl || x.url || '';
   const inv = x.inventoryInfo || [];
   return { id: String(id), title: String(title), brand: String(x.brand || brandOf(title)), price: sell, mrp,
-    disc: mrp > sell ? Math.round((mrp - sell) / mrp * 100) : 0,
+    disc,
     img: String(imgRaw).replace(/^http:/, 'https:'),
     url: route ? 'https://www.myntra.com/' + String(route).replace(/^\//, '').split('?')[0] : '',
     inStock: !inv.length || inv.some(s => s && s.available !== false), cat };
@@ -51,7 +57,9 @@ function extractPageProducts(html) {
         const media = d.productImage && d.productImage.productMedia;
         prods.push({ productId: d.styleId, brand: info.brand || '',
           product: info.additionalInfo ? (String(info.brand || '') + ' ' + info.additionalInfo).trim() : (info.brand || 'Product'),
-          price: pr.price, mrp: pr.mrp, searchImage: media && media.length ? media[0].src : '',
+          price: pr.discountedPrice != null ? pr.discountedPrice : pr.price, mrp: pr.mrp,
+          discount: pr.discount != null ? pr.discount : info.discount,
+          searchImage: media && media.length ? media[0].src : '',
           landingPageUrl: String((d.onPress && d.onPress.route) || ('/' + d.styleId)).replace(/^\//, '').split('?')[0] }); }
       if (prods.length) return prods; }
     return null; });

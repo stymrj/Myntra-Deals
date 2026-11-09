@@ -17,6 +17,7 @@ function extractFn(srcText, startMarker, endMarker) {
 // Shared helpers the parser depends on. `const` inside eval() does not leak
 // into this scope, so extract the arrow-function expressions and eval them.
 const price = eval('(' + extractFn(src, '  const price = ', '\n').slice('  const price = '.length).replace(/;\s*$/, '') + ')');
+const priceHi = eval('(' + extractFn(src, '  const priceHi = ', '\n').slice('  const priceHi = '.length).replace(/;\s*$/, '') + ')');
 const guessBrand = eval('(' + extractFn(src, '  const guessBrand = ', '\n').slice('  const guessBrand = '.length).replace(/;\s*$/, '') + ')');
 eval(extractFn(src, '  function normalise(x, cat) {', '\n  async function fetchPage'));
 
@@ -61,6 +62,31 @@ if (cards === all.length) {
   console.log('FAIL: expected ' + all.length + ' cards, got ' + cards);
   process.exit(1);
 }
+// --- highest-discount fixture: items at 85-95% off in the shapes that
+// used to drop (missing MRP + discount %, object/range prices, Redux
+// discountedPrice). Every item must parse with its expected discount, and
+// the highest-discount in-stock item must render FIRST.
+const hiFixture = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'sample-high-discount.json'), 'utf8'));
+const hiParsed = hiFixture.products.map(x => normalise(x, 'Men › Men T-shirts')).filter(Boolean);
+const hiRedux = extractPageProducts(hiFixture.reduxHtml).map(x => normalise(x, 'Mobile › Redux')).filter(Boolean);
+console.log('Highest-discount fixture items:', hiFixture.products.length, '| parsed:', hiParsed.length, '| Redux parsed:', hiRedux.length);
+if (hiParsed.length !== hiFixture.products.length || hiRedux.length !== hiFixture.reduxExpected.length) { console.log('FAIL: highest-discount fixture dropped items'); process.exit(1); }
+for (let i = 0; i < hiFixture.products.length; i++) {
+  const want = hiFixture.products[i];
+  if (hiParsed[i].disc !== want.expectedDisc || hiParsed[i].inStock !== want.expectedInStock) { console.log('FAIL: ' + want.id + ' disc/inStock ' + hiParsed[i].disc + '/' + hiParsed[i].inStock + ', want ' + want.expectedDisc + '/' + want.expectedInStock); process.exit(1); }
+}
+for (let i = 0; i < hiFixture.reduxExpected.length; i++) {
+  const want = hiFixture.reduxExpected[i];
+  if (!hiRedux[i] || hiRedux[i].disc !== want.disc || hiRedux[i].inStock !== want.inStock || hiRedux[i].title !== want.title) { console.log('FAIL: Redux highest-discount item mismatch'); process.exit(1); }
+}
+const byDisc = eval('(' + extractFn(src, '  const byDisc = ', '\n').slice('  const byDisc = '.length).replace(/;\s*$/, '') + ')');
+const hiVisible = hiParsed.concat(hiRedux).filter(p => p.inStock && p.disc >= 30).sort(byDisc);
+const hiHtml = hiVisible.map(p => card(p, false, {})).join('');
+const firstCard = hiHtml.split('<article')[1] || '';
+console.log('Highest-discount first in results:', hiVisible[0].title, hiVisible[0].disc + '%');
+if (hiVisible[0].disc !== 95 || !firstCard.includes(hiVisible[0].title) || !firstCard.includes('95% OFF')) { console.log('FAIL: highest-discount item does not render first'); process.exit(1); }
+console.log('PASS: highest-discount fixture (' + hiVisible.length + ' visible, 95% first)');
+
 
 // --- v2 layer: diagnostics, JSON export, in-browser self-test ---
 eval(extractFn(src, '  function diagnoseEmpty(diag, opts) {', '\n  function diagView'));
