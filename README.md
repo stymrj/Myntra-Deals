@@ -37,6 +37,9 @@ Scans the Myntra categories you pick, sorted by discount, and shows the biggest 
 - One-tap presets: under ₹99, 50% off, save ₹100+, price drops, lowest ever, best value
 - A setup checklist on first open
 - Filters: search, category, brand, maximum price, minimum discount, stock, saved items
+- In-stock-only is on by default; turn it off to see out-of-stock items, labelled as such
+- Built-in self-test (sidebar → Self-test) checks the parser on samples, no network needed
+- Empty-scan diagnostics say why nothing matched (signed out, rate-limited, failed categories, no pincode saved)
 - Shopping list with quantities, total and total savings
 - CSV export and copy-to-share text
 - Grid and list views, light and dark themes, keyboard shortcuts
@@ -50,13 +53,13 @@ Scans the Myntra categories you pick, sorted by discount, and shows the biggest 
 
 **Bookmarklet (desktop).** Run `node build.js`, open `index.html`, and drag the **Myntra Deals** button to your bookmarks bar. Open myntra.com and click the bookmark.
 
-**Bookmarklet (mobile).** On the install page, tap **Copy mobile loader**. It is a bookmark of about 380 characters that loads the latest version from GitHub Pages, so it fits on any phone. Create a bookmark named **Myntra Deals**, paste it as the address, and run it from the address bar on myntra.com. The full bookmarklet (about 45 KB, no network needed) is in `dist/bookmarklet.txt`.
+**Bookmarklet (mobile).** On the install page, tap **Copy mobile loader**. It is a bookmark of about 380 characters that loads the latest version from GitHub Pages, so it fits on any phone. Create a bookmark named **Myntra Deals**, paste it as the address, and run it from the address bar on myntra.com. The full bookmarklet (about 62 KB, no network needed) is in `dist/bookmarklet.txt`.
 
 **Userscript.** Install `dist/myntra-deals.user.js` in Tampermonkey or Violentmonkey. A small Deals button appears on every myntra.com page.
 
 ## Use
 
-Pick categories in the scan picker, press Scan, and browse Best deals / All deals / Saved. Heart a deal to save it, Add to list to build a shopping list, and use the presets (under ₹99, 50% off, save ₹100+) for one-tap filtering.
+Pick categories in the scan picker, press Scan, and browse Best deals / All deals / Saved. Heart a deal to save it, Add to list to build a shopping list, and use the presets (under ₹99, 50% off, save ₹100+) for one-tap filtering. Press **Self-test** in the sidebar any time to check the parser without scanning.
 
 
 ## Keyboard shortcuts
@@ -76,7 +79,7 @@ Each deal is sent once, and again only if its price drops further. Use the users
 
 ## Bot setup (Telegram alerts, v2)
 
-A scheduled Node bot lives in `bot/` (no dependencies, Node 18+). It scans the same categories with the same gateway API and listing-page fallback, and sends new deals, price drops and restocks to Telegram.
+A scheduled Node bot lives in `bot/` (no dependencies, Node 18+). It scans the categories in `bot/config.json` (7 groups, 25 sub-categories, 60% off by default, 1 page per category) with the same gateway API and listing-page fallback, and sends new deals, price drops and restocks to Telegram. The schedule runs on GitHub Actions — see Telegram bot (GitHub Actions) below.
 
 ```bash
 cp .env.example .env   # fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
@@ -86,21 +89,39 @@ node bot/run.js             # live run
 
 Get the token from `@BotFather` (`/newbot`) and the chat ID from `@userinfobot`. The bot needs your own token — nothing is pre-configured. State is kept in `data/state.json` (created on first run).
 
+## Telegram bot (GitHub Actions)
+
+Hunter can also run on its own, without a browser, on GitHub Actions. Every 30 minutes (08:31–00:01 IST) it scans Myntra, compares with the previous run (kept in `data/state.json`), and sends what changed to Telegram: a morning catalogue, new deals, price drops, and back-in-stock items. Identical prices are not re-sent.
+
+1. Fork [github.com/stymrj/Myntra-Deals](https://github.com/stymrj/Myntra-Deals).
+2. Create a bot with `@BotFather` (`TELEGRAM_BOT_TOKEN`) and get your chat ID from `@userinfobot` (`TELEGRAM_CHAT_ID`).
+3. In your fork, add those two as **Secrets**, and set the **Variable** `BOT_ENABLED` = `true`.
+4. In **Actions**, enable workflows, run **Telegram deal alerts** with **Print the messages instead of sending them** ticked to preview, then run it again for real.
+
+Optional variables: `MIN_DISCOUNT` (default 60), `THRESHOLDS` (e.g. `men=55,beauty=50`), `GROUPS` (e.g. `men,women,footwear`), `PAGES` (1–5, default 1), `DIGEST_HOUR_IST` (default 9), `MAX_WORKERS` (default 3), `MAX_ALERTS` (default 40), `RUNNER` (`self-hosted` if GitHub's IPs get blocked). Groups and thresholds live in `bot/config.json`.
+
+Local run: `cp .env.example .env`, then `node bot/run.js --dry-run` (prints, sends nothing) or `node bot/run.js`. Node 18+, no `npm install` needed.
+
 ## How it gets data
 
 Uses the search API Myntra's own listing pages use, sorted by discount, 50 products per page. If that API answers with a page instead of JSON, the tool reads the product data embedded in the page (desktop, mobile-web and category-page shapes). No sign-in or address is needed.
 
 ## Troubleshooting
 
-- **Blank results / "No deals found":** reload myntra.com and scan again, or lower Min discount in the menu. If the gateway is down, v2 falls back to the listing page once — if that also fails, wait and retry.
+- **Blank results / "No deals found":** read the "No deals found — here is why" message — it names the cause. Reload myntra.com and scan again, or lower Min discount in the menu. If the gateway is down, v2 falls back to the listing page once — if that also fails, wait and retry.
+- **Rate-limited:** the store throttled the scan ("Rate-limited by the store") — wait a few minutes before scanning again. The bot retries 429/503 responses, then stops that run.
 - **Mobile web shows nothing:** v2 reads the mobile-web page data, but Myntra changes its page format often. If a scan returns nothing on mobile web only, try desktop mode or the desktop site.
 - **Login / location:** no sign-in is needed. Size availability is summarised; check your size on the product page.
+- **Bot sends nothing on schedule:** scheduled runs start only after the repository variable `BOT_ENABLED` is `true`. A manual run from Actions always runs — tick the dry-run box to preview without sending.
+- **Bot logs "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set":** add both as repository Secrets (Settings → Secrets and variables → Actions).
+- **Bot fails with "Myntra refused the request (HTTP 403)":** Myntra blocked the request for that run; the run stops and exits non-zero if nothing was found, and the next scheduled run retries. If it keeps happening, run the bot on a self-hosted runner (`RUNNER` variable) or locally.
 
 ## Testing
 
 ```bash
 node --check src/deals.js
 node --check bot/platform.js bot/core.js bot/run.js
+python3 -c "import yaml; yaml.safe_load(open('.github/workflows/telegram-bot.yml'))"   # workflow parses
 node test-results-tab.js   # regression test: sample payload -> parser -> cards
 node build.js              # rebuild dist/ and index.html
 ```
@@ -121,6 +142,8 @@ src/deals.js         the app (one file, no dependencies)
 src/index.tpl.html   install page template
 build.js             builds dist/ and index.html
 bot/                 Telegram bot (Node, no dependencies)
+.github/workflows/   telegram-bot.yml (every 30 minutes, 08:31–00:01 IST)
+.env.example         settings for local bot runs
 test-results-tab.js  regression test: sample payload -> parser -> cards
 fixtures/sample-api.json
 favicon.svg
