@@ -2,7 +2,7 @@
 
 Scans the Myntra categories you pick, sorted by discount, and shows the biggest price cuts. It runs in your own browser as a bookmarklet or userscript. Nothing is uploaded and there is no account.
 
-**Live page:** http://satyamraj.in/Myntra-Deals/
+**Live page:** https://satyamraj.in/Myntra-Deals/
 
 ## What's new in v2
 
@@ -47,9 +47,9 @@ Scans the Myntra categories you pick, sorted by discount, and shows the biggest 
 
 ## Install
 
-![Install walkthrough](http://satyamraj.in/PriceDrop-Hunter/media/install-demo.gif)
+![Install walkthrough](https://satyamraj.in/PriceDrop-Hunter/media/install-demo.gif)
 
-[Watch the walkthrough video (MP4)](http://satyamraj.in/PriceDrop-Hunter/media/install-demo.mp4)
+[Watch the walkthrough video (MP4)](https://satyamraj.in/PriceDrop-Hunter/media/install-demo.mp4)
 
 **Bookmarklet (desktop).** Run `node build.js`, open `index.html`, and drag the **Myntra Deals** button to your bookmarks bar. Open myntra.com and click the bookmark.
 
